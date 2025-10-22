@@ -51,7 +51,7 @@ const FIXED_EXPENSES: FixedExpense[] = [
     { nombre: 'Cuota de Refrigeradora', monto: 19000 },
     { nombre: 'Cuota de Televisor', monto: 32000 },
     { nombre: 'Isayara', monto: 60000 },
-    { nombre: 'EPA Belen', monto: 88002 },
+    { nombre: 'EPA Belen', monto: 8800 },
     { nombre: 'YT Premium', monto: 4800 },
     { nombre: 'Microsoft', monto: 4000 },
     { nombre: 'Railway', monto: 3000 },
