@@ -40,7 +40,8 @@ const BILLING_CYCLES: BillingCycle[] = [
     { banco: 'PROMERICA', diaCorte: 24 },
     { banco: 'BAC', diaCorte: 24 },
     { banco: 'BCR', diaCorte: 24 },
-    { banco: 'SINPE MOVIL BCR', diaCorte: 24 }
+    { banco: 'SINPE MOVIL BCR', diaCorte: 24 },
+    { banco: 'T.C EFECTIVEX', diaCorte: 24 }
 ];
 
 const FIXED_EXPENSES: FixedExpense[] = [
@@ -50,7 +51,10 @@ const FIXED_EXPENSES: FixedExpense[] = [
     { nombre: 'Cuota de Refrigeradora', monto: 19000 },
     { nombre: 'Cuota de Televisor', monto: 32000 },
     { nombre: 'Isayara', monto: 60000 },
-    { nombre: 'EPA Belen', monto: 4720 }
+    { nombre: 'EPA Belen', monto: 88002 },
+    { nombre: 'YT Premium', monto: 4800 },
+    { nombre: 'Microsoft', monto: 4000 },
+    { nombre: 'Railway', monto: 3000 },
 ];
 
 const MONTHS = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
@@ -323,7 +327,7 @@ const ExpenseDashboard = () => {
 
                     const gastosCredixPromerica = expenses.filter(expense => {
                         const banco = expense.banco.toUpperCase();
-                        if (banco !== 'CREDIX' && banco !== 'PROMERICA') return false;
+                        if (banco !== 'CREDIX' && banco !== 'PROMERICA' && banco !== 'T.C EFECTIVEX') return false;
                         return isInBillingPeriod(expense.fechaDate, banco, monthIndex, year);
                     });
                     const totalGastosCredixPromerica = gastosCredixPromerica.reduce((sum, item) => sum + item.monto, 0);
@@ -337,7 +341,7 @@ const ExpenseDashboard = () => {
                                 <p className={`text-white text-5xl font-bold mb-4 ${disponibleProximoMes < 0 ? 'text-red-300' : ''}`}>₡{disponibleProximoMes.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 text-sm">
                                     <div className="bg-white/10 rounded-lg p-3"><p className="text-emerald-200 mb-1">Ingresos de {selectedMonths[0]}</p><p className="text-white font-bold">₡{totalIngresosDelMes.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
-                                    <div className="bg-white/10 rounded-lg p-3"><p className="text-emerald-200 mb-1">Gastos CREDIX + PROMERICA</p><p className="text-white font-bold">₡{totalGastosCredixPromerica.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
+                                    <div className="bg-white/10 rounded-lg p-3"><p className="text-emerald-200 mb-1">Gastos CREDIX + PROMERICA + EFECTIVEX</p><p className="text-white font-bold">₡{totalGastosCredixPromerica.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
                                     <div className="bg-white/10 rounded-lg p-3"><p className="text-emerald-200 mb-1">Gastos Fijos</p><p className="text-white font-bold">₡{totalGastosFijos.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
                                 </div>
                             </div>
