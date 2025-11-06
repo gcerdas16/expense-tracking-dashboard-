@@ -70,8 +70,8 @@ const ExpenseDashboard = () => {
     const [selectedYears, setSelectedYears] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-    const EXPENSES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTT4gZzdxF0-mKx_BD9QlG-8zZT-Wg__fvmHBUKW6lkl91DbAwgG81m71_eJYNn8JHHvfx8bF7UCrAv/pub?gid=0&single=true&output=csv';
-    const INCOMES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTT4gZzdxF0-mKx_BD9QlG-8zZT-Wg__fvmHBUKW6lkl91DbAwgG81m71_eJYNn8JHHvfx8bF7UCrAv/pub?gid=400685926&single=true&output=csv';
+    const EXPENSES_CSV_URL = '/api/data?type=expenses';
+    const INCOMES_CSV_URL = '/api/data?type=incomes';
 
     useEffect(() => {
         fetchData();
