@@ -11,6 +11,7 @@ interface ExpenseData {
     monto: number;
     categoria: string;
     banco: string;
+    descripcion: string;
 }
 
 interface IncomeData {
@@ -108,37 +109,82 @@ function validateAndParseDate(fechaStr: string): DateParseResult {
         return { date: null, error: 'Fecha vacía o inválida' };
     }
 
-    const parts = fechaStr.trim().split('/');
-    if (parts.length !== 3) {
-        return { date: null, error: `Fecha debe estar en formato DD/MM/YYYY, recibido: ${fechaStr}` };
+    const cleaned = fechaStr.trim();
+
+    // FORMATO 1: DD/MM/YYYY (con barras)
+    if (cleaned.includes('/')) {
+        const parts = cleaned.split('/');
+        if (parts.length !== 3) {
+            return { date: null, error: `Fecha debe estar en formato DD/MM/YYYY, recibido: ${fechaStr}` };
+        }
+
+        const dia = parseInt(parts[0], 10);
+        const mes = parseInt(parts[1], 10);
+        const año = parseInt(parts[2], 10);
+
+        if (isNaN(dia) || isNaN(mes) || isNaN(año)) {
+            return { date: null, error: `Fecha contiene valores no numéricos: ${fechaStr}` };
+        }
+
+        if (mes < 1 || mes > 12) {
+            return { date: null, error: `Mes inválido (${mes}). Debe estar entre 1-12 en fecha: ${fechaStr}` };
+        }
+
+        if (dia < 1 || dia > 31) {
+            return { date: null, error: `Día inválido (${dia}). Debe estar entre 1-31 en fecha: ${fechaStr}` };
+        }
+
+        if (año < 2000 || año > 2100) {
+            return { date: null, error: `Año inválido (${año}). Debe estar entre 2000-2100 en fecha: ${fechaStr}` };
+        }
+
+        const parsedDate = new Date(año, mes - 1, dia);
+        if (isNaN(parsedDate.getTime())) {
+            return { date: null, error: `Fecha es inválida (posiblemente día 31 en mes con 30 días): ${fechaStr}` };
+        }
+
+        return { date: parsedDate, error: null };
     }
 
-    const dia = parseInt(parts[0], 10);
-    const mes = parseInt(parts[1], 10);
-    const año = parseInt(parts[2], 10);
+    // FORMATO 2: DD mes YYYY (ejemplo: "24 octubre 2025")
+    const monthNames: { [key: string]: number } = {
+        'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+        'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+        'septiembre': 9, 'setiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+    };
 
-    if (isNaN(dia) || isNaN(mes) || isNaN(año)) {
-        return { date: null, error: `Fecha contiene valores no numéricos: ${fechaStr}` };
+    const parts = cleaned.split(' ');
+    if (parts.length === 3) {
+        const dia = parseInt(parts[0], 10);
+        const mesTexto = parts[1].toLowerCase();
+        const año = parseInt(parts[2], 10);
+
+        if (isNaN(dia) || isNaN(año)) {
+            return { date: null, error: `Fecha contiene valores no numéricos: ${fechaStr}` };
+        }
+
+        const mes = monthNames[mesTexto];
+        if (!mes) {
+            return { date: null, error: `Mes no reconocido: ${mesTexto} en fecha: ${fechaStr}` };
+        }
+
+        if (dia < 1 || dia > 31) {
+            return { date: null, error: `Día inválido (${dia}). Debe estar entre 1-31 en fecha: ${fechaStr}` };
+        }
+
+        if (año < 2000 || año > 2100) {
+            return { date: null, error: `Año inválido (${año}). Debe estar entre 2000-2100 en fecha: ${fechaStr}` };
+        }
+
+        const parsedDate = new Date(año, mes - 1, dia);
+        if (isNaN(parsedDate.getTime())) {
+            return { date: null, error: `Fecha es inválida: ${fechaStr}` };
+        }
+
+        return { date: parsedDate, error: null };
     }
 
-    if (mes < 1 || mes > 12) {
-        return { date: null, error: `Mes inválido (${mes}). Debe estar entre 1-12 en fecha: ${fechaStr}` };
-    }
-
-    if (dia < 1 || dia > 31) {
-        return { date: null, error: `Día inválido (${dia}). Debe estar entre 1-31 en fecha: ${fechaStr}` };
-    }
-
-    if (año < 2000 || año > 2100) {
-        return { date: null, error: `Año inválido (${año}). Debe estar entre 2000-2100 en fecha: ${fechaStr}` };
-    }
-
-    const parsedDate = new Date(año, mes - 1, dia);
-    if (isNaN(parsedDate.getTime())) {
-        return { date: null, error: `Fecha es inválida (posiblemente día 31 en mes con 30 días): ${fechaStr}` };
-    }
-
-    return { date: parsedDate, error: null };
+    return { date: null, error: `Formato de fecha no reconocido: ${fechaStr}. Use DD/MM/YYYY o DD mes YYYY` };
 }
 
 const ExpenseDashboard = () => {
@@ -151,6 +197,7 @@ const ExpenseDashboard = () => {
     const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
     const [selectedYears, setSelectedYears] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const EXPENSES_CSV_URL = '/api/data?type=expenses';
     const INCOMES_CSV_URL = '/api/data?type=incomes';
@@ -163,14 +210,24 @@ const ExpenseDashboard = () => {
 
     const fetchData = async () => {
         try {
+            console.log('=== FETCHING DATA ===');
+            console.log('Timestamp:', new Date().toLocaleString());
+            
             setValidationErrors([]);
-            const expensesResponse = await fetch(EXPENSES_CSV_URL);
+            
+            // Agregar timestamp para evitar cache
+            const timestamp = new Date().getTime();
+            const expensesResponse = await fetch(`${EXPENSES_CSV_URL}&_t=${timestamp}`);
+            console.log('Expenses response status:', expensesResponse.status);
             if (!expensesResponse.ok) throw new Error(`Error: ${expensesResponse.status}`);
             const expensesText = await expensesResponse.text();
+            console.log('Expenses rows:', expensesText.split('\n').length);
 
-            const incomesResponse = await fetch(INCOMES_CSV_URL);
+            const incomesResponse = await fetch(`${INCOMES_CSV_URL}&_t=${timestamp}`);
+            console.log('Incomes response status:', incomesResponse.status);
             if (!incomesResponse.ok) throw new Error(`Error: ${incomesResponse.status}`);
             const incomesText = await incomesResponse.text();
+            console.log('Incomes rows:', incomesText.split('\n').length);
 
             const expensesErrors: ValidationError[] = [];
             const incomesErrors: ValidationError[] = [];
@@ -197,11 +254,14 @@ const ExpenseDashboard = () => {
                             fechaDate: fechaDate || new Date(),
                             monto: monto || 0,
                             categoria: row.Categoría || row.Categoria || row.categoria || 'Sin categoría',
-                            banco: (row.Banco || row.banco || 'Sin banco').toUpperCase()
+                            banco: (row.Banco || row.banco || 'Sin banco').toUpperCase(),
+                            descripcion: row.Descripcion || row.descripcion || row.Descripción || row.descripción || ''
                         };
                     }).filter((item: ExpenseData) => item.monto > 0).sort((a, b) => b.fechaDate.getTime() - a.fechaDate.getTime());
 
                     setExpenses(expensesParsed);
+                    console.log('Expenses parsed:', expensesParsed.length);
+                    console.log('Sample expense:', expensesParsed[0]);
                     if (expensesErrors.length > 0) {
                         setValidationErrors(prev => [...prev, ...expensesErrors]);
                     }
@@ -212,6 +272,7 @@ const ExpenseDashboard = () => {
                 header: true,
                 skipEmptyLines: true,
                 complete: (results) => {
+                    console.log('Raw income row sample:', results.data[0]);
                     const incomesParsed = results.data.map((row, index) => {
                         const { monto, error: montoError } = validateAndParseMonto(row.Monto || row.monto || '0');
                         const fechaStr = row['Fecha de Ingreso'] || row['Fecha de ingreso'] || row.Fecha || row.fecha || '';
@@ -233,6 +294,9 @@ const ExpenseDashboard = () => {
                     }).filter((item: IncomeData) => item.monto > 0);
 
                     setIncomes(incomesParsed);
+                    console.log('Incomes parsed:', incomesParsed.length);
+                    console.log('Sample income:', incomesParsed[0]);
+                    console.log('=== FETCH COMPLETE ===\n');
                     if (incomesErrors.length > 0) {
                         setValidationErrors(prev => [...prev, ...incomesErrors]);
                     }
@@ -243,6 +307,12 @@ const ExpenseDashboard = () => {
             setError(`Error: ${err instanceof Error ? err.message : 'Unknown'}`);
             setLoading(false);
         }
+    };
+
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true);
+        await fetchData();
+        setTimeout(() => setIsRefreshing(false), 1000);
     };
 
     if (loading) {
@@ -279,6 +349,22 @@ const ExpenseDashboard = () => {
         return itemTime >= range.fechaInicio.getTime() && itemTime <= range.fechaFin.getTime();
     };
 
+    // Función específica para calcular el rango de ingresos (siempre del 24 al 23)
+    const getIncomeRange = (monthIndex: number, year: number) => {
+        // Los ingresos del mes X van del 24 del mes X al 23 del mes X+1
+        const inicioIngresos = new Date(year, monthIndex, 24, 0, 0, 0);
+        const añoFin = monthIndex === 11 ? year + 1 : year;
+        const mesFin = monthIndex === 11 ? 0 : monthIndex + 1;
+        const finIngresos = new Date(añoFin, mesFin, 23, 23, 59, 59);
+        return { inicioIngresos, finIngresos };
+    };
+
+    const isInIncomePeriod = (fecha: Date, monthIndex: number, year: number): boolean => {
+        const range = getIncomeRange(monthIndex, year);
+        const itemTime = fecha.getTime();
+        return itemTime >= range.inicioIngresos.getTime() && itemTime <= range.finIngresos.getTime();
+    };
+
     let filteredExpenses = expenses;
     let filteredIncomes = incomes;
 
@@ -291,14 +377,12 @@ const ExpenseDashboard = () => {
             const monthIndex = MONTHS.indexOf(month);
             return selectedYears.some(yearStr => isInBillingPeriod(item.fechaDate, item.banco, monthIndex, parseInt(yearStr, 10)));
         }));
+        // Los ingresos usan un rango fijo (24 al 23), no dependen de bancos
         filteredIncomes = filteredIncomes.filter(item => selectedMonths.some(month => {
             const monthIndex = MONTHS.indexOf(month);
             return selectedYears.some(yearStr => {
                 const year = parseInt(yearStr, 10);
-                if (selectedBanks.length > 0) {
-                    return selectedBanks.some(banco => isInBillingPeriod(item.fechaDate, banco, monthIndex, year));
-                }
-                return BILLING_CYCLES.some(cycle => isInBillingPeriod(item.fechaDate, cycle.banco, monthIndex, year));
+                return isInIncomePeriod(item.fechaDate, monthIndex, year);
             });
         }));
     }
@@ -347,32 +431,6 @@ const ExpenseDashboard = () => {
                     <DollarSign className="text-purple-400" size={40} />
                     Dashboard de Gastos
                 </h1>
-
-                {/* ALERTAS DE VALIDACIÓN */}
-                {validationErrors.length > 0 && (
-                    <div className="mb-8 bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4">
-                        <div className="flex items-start gap-3">
-                            <AlertCircle className="text-yellow-400 flex-shrink-0 mt-1" size={20} />
-                            <div>
-                                <p className="text-yellow-300 font-semibold mb-2">
-                                    Errores de validación encontrados en {validationErrors.length} registros:
-                                </p>
-                                <div className="text-yellow-200 text-sm space-y-1 max-h-32 overflow-y-auto">
-                                    {validationErrors.slice(0, 5).map((err, idx) => (
-                                        <div key={idx}>
-                                            <strong>Fila {err.row}:</strong> {err.issue} (valor: {err.value})
-                                        </div>
-                                    ))}
-                                    {validationErrors.length > 5 && (
-                                        <div className="text-yellow-400 mt-2">
-                                            ... y {validationErrors.length - 5} errores más
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
@@ -656,8 +714,7 @@ const ExpenseDashboard = () => {
                                         <tr className="border-b border-slate-700">
                                             <th className="text-purple-400 pb-3 pr-4 pt-3">Comercio</th>
                                             <th className="text-purple-400 pb-3 pr-4 pt-3">Fecha</th>
-                                            <th className="text-purple-400 pb-3 pr-4 pt-3">Categoría</th>
-                                            <th className="text-purple-400 pb-3 pr-4 pt-3">Banco</th>
+                                            <th className="text-purple-400 pb-3 pr-4 pt-3">Descripción</th>
                                             <th className="text-purple-400 pb-3 text-right pt-3">Monto</th>
                                         </tr>
                                     </thead>
@@ -666,8 +723,7 @@ const ExpenseDashboard = () => {
                                             <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
                                                 <td className="py-3 pr-4 text-white">{item.comercio}</td>
                                                 <td className="py-3 pr-4 text-gray-300">{item.fecha}</td>
-                                                <td className="py-3 pr-4 text-gray-300">{item.categoria}</td>
-                                                <td className="py-3 pr-4 text-gray-300">{item.banco}</td>
+                                                <td className="py-3 pr-4 text-gray-300">{item.descripcion || '-'}</td>
                                                 <td className="py-3 text-right">
                                                     <span className="text-pink-400 font-bold">
                                                         {item.monto.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
