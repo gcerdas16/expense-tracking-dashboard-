@@ -1,11 +1,6 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
-  // Configurar la raíz correcta del proyecto
-  experimental: {
-    outputFileTracingRoot: path.join(__dirname),
-  },
   async headers() {
     return [
       {

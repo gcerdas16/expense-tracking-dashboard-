@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingDown, CreditCard, TrendingUp, X, AlertCircle } from 'lucide-react';
+import { DollarSign, CreditCard, X } from 'lucide-react';
 import Papa from 'papaparse';
 
 interface ExpenseData {
@@ -192,12 +192,10 @@ const ExpenseDashboard = () => {
     const [incomes, setIncomes] = useState<IncomeData[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
     const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
     const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
     const [selectedYears, setSelectedYears] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const EXPENSES_CSV_URL = '/api/data?type=expenses';
     const INCOMES_CSV_URL = '/api/data?type=incomes';
@@ -213,8 +211,6 @@ const ExpenseDashboard = () => {
             console.log('=== FETCHING DATA ===');
             console.log('Timestamp:', new Date().toLocaleString());
             
-            setValidationErrors([]);
-            
             // Agregar timestamp para evitar cache
             const timestamp = new Date().getTime();
             const expensesResponse = await fetch(`${EXPENSES_CSV_URL}&_t=${timestamp}`);
@@ -229,9 +225,6 @@ const ExpenseDashboard = () => {
             const incomesText = await incomesResponse.text();
             console.log('Incomes rows:', incomesText.split('\n').length);
 
-            const expensesErrors: ValidationError[] = [];
-            const incomesErrors: ValidationError[] = [];
-
             Papa.parse<Record<string, string>>(expensesText, {
                 header: true,
                 skipEmptyLines: true,
@@ -240,13 +233,6 @@ const ExpenseDashboard = () => {
                         const { monto, error: montoError } = validateAndParseMonto(row.Monto || row.monto || '0');
                         const fechaStr = row.Fecha || row.fecha || '';
                         const { date: fechaDate, error: dateError } = validateAndParseDate(fechaStr);
-
-                        if (montoError) {
-                            expensesErrors.push({ row: index + 2, issue: montoError, value: row.Monto || row.monto || 'vacío' });
-                        }
-                        if (dateError) {
-                            expensesErrors.push({ row: index + 2, issue: dateError, value: fechaStr });
-                        }
 
                         return {
                             comercio: row.Comercio || row.comercio || 'Sin comercio',
@@ -262,9 +248,6 @@ const ExpenseDashboard = () => {
                     setExpenses(expensesParsed);
                     console.log('Expenses parsed:', expensesParsed.length);
                     console.log('Sample expense:', expensesParsed[0]);
-                    if (expensesErrors.length > 0) {
-                        setValidationErrors(prev => [...prev, ...expensesErrors]);
-                    }
                 }
             });
 
@@ -278,13 +261,6 @@ const ExpenseDashboard = () => {
                         const fechaStr = row['Fecha de Ingreso'] || row['Fecha de ingreso'] || row.Fecha || row.fecha || '';
                         const { date: fechaDate, error: dateError } = validateAndParseDate(fechaStr);
 
-                        if (montoError) {
-                            incomesErrors.push({ row: index + 2, issue: montoError, value: row.Monto || row.monto || 'vacío' });
-                        }
-                        if (dateError) {
-                            incomesErrors.push({ row: index + 2, issue: dateError, value: fechaStr });
-                        }
-
                         return {
                             fuente: row['Fuente del Ingreso'] || row.Fuente || row.fuente || 'Sin fuente',
                             fecha: fechaStr,
@@ -297,9 +273,6 @@ const ExpenseDashboard = () => {
                     console.log('Incomes parsed:', incomesParsed.length);
                     console.log('Sample income:', incomesParsed[0]);
                     console.log('=== FETCH COMPLETE ===\n');
-                    if (incomesErrors.length > 0) {
-                        setValidationErrors(prev => [...prev, ...incomesErrors]);
-                    }
                     setLoading(false);
                 }
             });
@@ -307,12 +280,6 @@ const ExpenseDashboard = () => {
             setError(`Error: ${err instanceof Error ? err.message : 'Unknown'}`);
             setLoading(false);
         }
-    };
-
-    const handleManualRefresh = async () => {
-        setIsRefreshing(true);
-        await fetchData();
-        setTimeout(() => setIsRefreshing(false), 1000);
     };
 
     if (loading) {
@@ -366,7 +333,6 @@ const ExpenseDashboard = () => {
     };
 
     let filteredExpenses = expenses;
-    let filteredIncomes = incomes;
 
     if (selectedBanks.length > 0) {
         filteredExpenses = filteredExpenses.filter(item => selectedBanks.includes(item.banco));
@@ -376,14 +342,6 @@ const ExpenseDashboard = () => {
         filteredExpenses = filteredExpenses.filter(item => selectedMonths.some(month => {
             const monthIndex = MONTHS.indexOf(month);
             return selectedYears.some(yearStr => isInBillingPeriod(item.fechaDate, item.banco, monthIndex, parseInt(yearStr, 10)));
-        }));
-        // Los ingresos usan un rango fijo (24 al 23), no dependen de bancos
-        filteredIncomes = filteredIncomes.filter(item => selectedMonths.some(month => {
-            const monthIndex = MONTHS.indexOf(month);
-            return selectedYears.some(yearStr => {
-                const year = parseInt(yearStr, 10);
-                return isInIncomePeriod(item.fechaDate, monthIndex, year);
-            });
         }));
     }
 
