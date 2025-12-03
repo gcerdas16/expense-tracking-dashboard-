@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingDown, CreditCard, TrendingUp, X } from 'lucide-react';
+import { DollarSign, TrendingDown, CreditCard, TrendingUp, X, AlertCircle } from 'lucide-react';
 import Papa from 'papaparse';
 
 interface ExpenseData {
@@ -35,6 +35,22 @@ interface FixedExpense {
     monto: number;
 }
 
+interface ValidationError {
+    row: number;
+    issue: string;
+    value: string;
+}
+
+interface ParseResult {
+    monto: number | null;
+    error: string | null;
+}
+
+interface DateParseResult {
+    date: Date | null;
+    error: string | null;
+}
+
 const BILLING_CYCLES: BillingCycle[] = [
     { banco: 'CREDIX', diaCorte: 18 },
     { banco: 'PROMERICA', diaCorte: 24 },
@@ -60,11 +76,77 @@ const FIXED_EXPENSES: FixedExpense[] = [
 const MONTHS = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 const YEARS = ['2025', '2026', '2027', '2028', '2029', '2030'];
 
+// ================================================================================================
+// FUNCIONES DE VALIDACIÓN
+// ================================================================================================
+
+function validateAndParseMonto(montoStr: string): ParseResult {
+    if (!montoStr || typeof montoStr !== 'string') {
+        return { monto: null, error: 'Monto vacío o inválido' };
+    }
+
+    const cleaned = montoStr.replace(/₡/g, '').replace(/\./g, '').replace(/,/g, '.').trim();
+    const parsed = parseFloat(cleaned);
+
+    if (isNaN(parsed)) {
+        return { monto: null, error: `Monto no es un número válido: ${montoStr}` };
+    }
+
+    if (parsed <= 0) {
+        return { monto: null, error: `Monto debe ser mayor a 0: ${parsed}` };
+    }
+
+    if (parsed > 999999999) {
+        return { monto: null, error: `Monto parece muy grande: ${parsed}` };
+    }
+
+    return { monto: parsed, error: null };
+}
+
+function validateAndParseDate(fechaStr: string): DateParseResult {
+    if (!fechaStr || typeof fechaStr !== 'string') {
+        return { date: null, error: 'Fecha vacía o inválida' };
+    }
+
+    const parts = fechaStr.trim().split('/');
+    if (parts.length !== 3) {
+        return { date: null, error: `Fecha debe estar en formato DD/MM/YYYY, recibido: ${fechaStr}` };
+    }
+
+    const dia = parseInt(parts[0], 10);
+    const mes = parseInt(parts[1], 10);
+    const año = parseInt(parts[2], 10);
+
+    if (isNaN(dia) || isNaN(mes) || isNaN(año)) {
+        return { date: null, error: `Fecha contiene valores no numéricos: ${fechaStr}` };
+    }
+
+    if (mes < 1 || mes > 12) {
+        return { date: null, error: `Mes inválido (${mes}). Debe estar entre 1-12 en fecha: ${fechaStr}` };
+    }
+
+    if (dia < 1 || dia > 31) {
+        return { date: null, error: `Día inválido (${dia}). Debe estar entre 1-31 en fecha: ${fechaStr}` };
+    }
+
+    if (año < 2000 || año > 2100) {
+        return { date: null, error: `Año inválido (${año}). Debe estar entre 2000-2100 en fecha: ${fechaStr}` };
+    }
+
+    const parsedDate = new Date(año, mes - 1, dia);
+    if (isNaN(parsedDate.getTime())) {
+        return { date: null, error: `Fecha es inválida (posiblemente día 31 en mes con 30 días): ${fechaStr}` };
+    }
+
+    return { date: parsedDate, error: null };
+}
+
 const ExpenseDashboard = () => {
     const [expenses, setExpenses] = useState<ExpenseData[]>([]);
     const [incomes, setIncomes] = useState<IncomeData[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
     const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
     const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
     const [selectedYears, setSelectedYears] = useState<string[]>([]);
@@ -81,6 +163,7 @@ const ExpenseDashboard = () => {
 
     const fetchData = async () => {
         try {
+            setValidationErrors([]);
             const expensesResponse = await fetch(EXPENSES_CSV_URL);
             if (!expensesResponse.ok) throw new Error(`Error: ${expensesResponse.status}`);
             const expensesText = await expensesResponse.text();
@@ -89,27 +172,39 @@ const ExpenseDashboard = () => {
             if (!incomesResponse.ok) throw new Error(`Error: ${incomesResponse.status}`);
             const incomesText = await incomesResponse.text();
 
+            const expensesErrors: ValidationError[] = [];
+            const incomesErrors: ValidationError[] = [];
+
             Papa.parse<Record<string, string>>(expensesText, {
                 header: true,
                 skipEmptyLines: true,
                 complete: (results) => {
-                    const expensesParsed = results.data.map((row) => {
-                        const montoStr = (row.Monto || row.monto || '0').replace(/₡/g, '').replace(/\./g, '').replace(/,/g, '.').trim();
-                        const monto = parseFloat(montoStr) || 0;
+                    const expensesParsed = results.data.map((row, index) => {
+                        const { monto, error: montoError } = validateAndParseMonto(row.Monto || row.monto || '0');
                         const fechaStr = row.Fecha || row.fecha || '';
-                        const [dia, mes, año] = fechaStr.split('/');
-                        const fechaDate = new Date(parseInt(año), parseInt(mes) - 1, parseInt(dia));
+                        const { date: fechaDate, error: dateError } = validateAndParseDate(fechaStr);
+
+                        if (montoError) {
+                            expensesErrors.push({ row: index + 2, issue: montoError, value: row.Monto || row.monto || 'vacío' });
+                        }
+                        if (dateError) {
+                            expensesErrors.push({ row: index + 2, issue: dateError, value: fechaStr });
+                        }
 
                         return {
                             comercio: row.Comercio || row.comercio || 'Sin comercio',
                             fecha: fechaStr,
-                            fechaDate: fechaDate,
-                            monto: monto,
+                            fechaDate: fechaDate || new Date(),
+                            monto: monto || 0,
                             categoria: row.Categoría || row.Categoria || row.categoria || 'Sin categoría',
                             banco: (row.Banco || row.banco || 'Sin banco').toUpperCase()
                         };
                     }).filter((item: ExpenseData) => item.monto > 0).sort((a, b) => b.fechaDate.getTime() - a.fechaDate.getTime());
+
                     setExpenses(expensesParsed);
+                    if (expensesErrors.length > 0) {
+                        setValidationErrors(prev => [...prev, ...expensesErrors]);
+                    }
                 }
             });
 
@@ -117,27 +212,30 @@ const ExpenseDashboard = () => {
                 header: true,
                 skipEmptyLines: true,
                 complete: (results) => {
-                    const incomesParsed = results.data.map((row) => {
-                        const montoStr = (row.Monto || row.monto || '0').replace(/₡/g, '').replace(/\./g, '').replace(/,/g, '.').trim();
-                        const monto = parseFloat(montoStr) || 0;
+                    const incomesParsed = results.data.map((row, index) => {
+                        const { monto, error: montoError } = validateAndParseMonto(row.Monto || row.monto || '0');
                         const fechaStr = row['Fecha de Ingreso'] || row['Fecha de ingreso'] || row.Fecha || row.fecha || '';
+                        const { date: fechaDate, error: dateError } = validateAndParseDate(fechaStr);
 
-                        let fechaDate: Date;
-                        if (fechaStr.includes('/')) {
-                            const [dia, mes, año] = fechaStr.split('/');
-                            fechaDate = new Date(parseInt(año), parseInt(mes) - 1, parseInt(dia));
-                        } else {
-                            fechaDate = new Date(fechaStr);
+                        if (montoError) {
+                            incomesErrors.push({ row: index + 2, issue: montoError, value: row.Monto || row.monto || 'vacío' });
+                        }
+                        if (dateError) {
+                            incomesErrors.push({ row: index + 2, issue: dateError, value: fechaStr });
                         }
 
                         return {
                             fuente: row['Fuente del Ingreso'] || row.Fuente || row.fuente || 'Sin fuente',
                             fecha: fechaStr,
-                            fechaDate: fechaDate,
-                            monto: monto
+                            fechaDate: fechaDate || new Date(),
+                            monto: monto || 0
                         };
                     }).filter((item: IncomeData) => item.monto > 0);
+
                     setIncomes(incomesParsed);
+                    if (incomesErrors.length > 0) {
+                        setValidationErrors(prev => [...prev, ...incomesErrors]);
+                    }
                     setLoading(false);
                 }
             });
@@ -147,8 +245,21 @@ const ExpenseDashboard = () => {
         }
     };
 
-    if (loading) return <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center"><div className="text-white text-2xl">Cargando datos...</div></div>;
-    if (error) return <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center"><div className="text-red-400 text-2xl">{error}</div></div>;
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+                <div className="text-white text-2xl">Cargando datos...</div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+                <div className="text-red-400 text-2xl">{error}</div>
+            </div>
+        );
+    }
 
     const getDateRange = (banco: string, monthIndex: number, year: number) => {
         const cycle = BILLING_CYCLES.find(c => c.banco === banco);
@@ -171,18 +282,22 @@ const ExpenseDashboard = () => {
     let filteredExpenses = expenses;
     let filteredIncomes = incomes;
 
-    if (selectedBanks.length > 0) filteredExpenses = filteredExpenses.filter(item => selectedBanks.includes(item.banco));
+    if (selectedBanks.length > 0) {
+        filteredExpenses = filteredExpenses.filter(item => selectedBanks.includes(item.banco));
+    }
 
     if (selectedMonths.length > 0 && selectedYears.length > 0) {
         filteredExpenses = filteredExpenses.filter(item => selectedMonths.some(month => {
             const monthIndex = MONTHS.indexOf(month);
-            return selectedYears.some(yearStr => isInBillingPeriod(item.fechaDate, item.banco, monthIndex, parseInt(yearStr)));
+            return selectedYears.some(yearStr => isInBillingPeriod(item.fechaDate, item.banco, monthIndex, parseInt(yearStr, 10)));
         }));
         filteredIncomes = filteredIncomes.filter(item => selectedMonths.some(month => {
             const monthIndex = MONTHS.indexOf(month);
             return selectedYears.some(yearStr => {
-                const year = parseInt(yearStr);
-                if (selectedBanks.length > 0) return selectedBanks.some(banco => isInBillingPeriod(item.fechaDate, banco, monthIndex, year));
+                const year = parseInt(yearStr, 10);
+                if (selectedBanks.length > 0) {
+                    return selectedBanks.some(banco => isInBillingPeriod(item.fechaDate, banco, monthIndex, year));
+                }
                 return BILLING_CYCLES.some(cycle => isInBillingPeriod(item.fechaDate, cycle.banco, monthIndex, year));
             });
         }));
@@ -204,12 +319,17 @@ const ExpenseDashboard = () => {
         if (selectedMonths.length > 0 && selectedYears.length > 0) {
             if (selectedMonths.length === 1 && selectedYears.length === 1) {
                 const monthIndex = MONTHS.indexOf(selectedMonths[0]);
-                const year = parseInt(selectedYears[0]);
+                const year = parseInt(selectedYears[0], 10);
                 if (selectedBanks.length === 1) {
                     const range = getDateRange(selectedBanks[0], monthIndex, year);
-                    if (range) return `${range.fechaInicio.getDate()} ${MONTHS[range.fechaInicio.getMonth()]} ${range.fechaInicio.getFullYear()} al ${range.fechaFin.getDate()} ${MONTHS[range.fechaFin.getMonth()]} ${range.fechaFin.getFullYear()}`;
-                } else if (selectedBanks.length > 1) return `Periodo de corte de cada tarjeta seleccionada para ${selectedMonths[0]} ${selectedYears[0]}`;
-                else return `Periodo de corte de todas las tarjetas para ${selectedMonths[0]} ${selectedYears[0]}`;
+                    if (range) {
+                        return `${range.fechaInicio.getDate()} ${MONTHS[range.fechaInicio.getMonth()]} ${range.fechaInicio.getFullYear()} al ${range.fechaFin.getDate()} ${MONTHS[range.fechaFin.getMonth()]} ${range.fechaFin.getFullYear()}`;
+                    }
+                } else if (selectedBanks.length > 1) {
+                    return `Periodo de corte de cada tarjeta seleccionada para ${selectedMonths[0]} ${selectedYears[0]}`;
+                } else {
+                    return `Periodo de corte de todas las tarjetas para ${selectedMonths[0]} ${selectedYears[0]}`;
+                }
             } else {
                 const monthsText = selectedMonths.length > 3 ? `${selectedMonths.length} meses` : selectedMonths.join(', ');
                 return `Periodos seleccionados: ${monthsText} de ${selectedYears.join(', ')}`;
@@ -228,63 +348,171 @@ const ExpenseDashboard = () => {
                     Dashboard de Gastos
                 </h1>
 
+                {/* ALERTAS DE VALIDACIÓN */}
+                {validationErrors.length > 0 && (
+                    <div className="mb-8 bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                            <AlertCircle className="text-yellow-400 flex-shrink-0 mt-1" size={20} />
+                            <div>
+                                <p className="text-yellow-300 font-semibold mb-2">
+                                    Errores de validación encontrados en {validationErrors.length} registros:
+                                </p>
+                                <div className="text-yellow-200 text-sm space-y-1 max-h-32 overflow-y-auto">
+                                    {validationErrors.slice(0, 5).map((err, idx) => (
+                                        <div key={idx}>
+                                            <strong>Fila {err.row}:</strong> {err.issue} (valor: {err.value})
+                                        </div>
+                                    ))}
+                                    {validationErrors.length > 5 && (
+                                        <div className="text-yellow-400 mt-2">
+                                            ... y {validationErrors.length - 5} errores más
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
-                        <label className="text-white text-sm mb-2 block font-semibold">Tarjetas: ({selectedBanks.length > 0 ? selectedBanks.length : 'Todas'})</label>
+                        <label className="text-white text-sm mb-2 block font-semibold">
+                            Tarjetas: ({selectedBanks.length > 0 ? selectedBanks.length : 'Todas'})
+                        </label>
                         <div className="bg-slate-800 border border-purple-500 rounded-lg p-4 max-h-48 overflow-y-auto">
                             <div className="space-y-2">
                                 {uniqueBanks.map(banco => (
                                     <label key={banco} className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
-                                        <input type="checkbox" checked={selectedBanks.includes(banco)} onChange={(e) => { if (e.target.checked) setSelectedBanks([...selectedBanks, banco]); else setSelectedBanks(selectedBanks.filter(b => b !== banco)); setSelectedCategory(null); }} className="w-4 h-4 text-purple-500 border-purple-400 rounded focus:ring-purple-500" />
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedBanks.includes(banco)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedBanks([...selectedBanks, banco]);
+                                                } else {
+                                                    setSelectedBanks(selectedBanks.filter(b => b !== banco));
+                                                }
+                                                setSelectedCategory(null);
+                                            }}
+                                            className="w-4 h-4 text-purple-500 border-purple-400 rounded focus:ring-purple-500"
+                                        />
                                         <span className="text-white text-sm">{banco}</span>
                                     </label>
                                 ))}
                             </div>
-                            {selectedBanks.length > 0 && <button onClick={() => { setSelectedBanks([]); setSelectedCategory(null); }} className="mt-3 w-full text-purple-400 hover:text-purple-300 text-sm font-medium">Limpiar selección</button>}
+                            {selectedBanks.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        setSelectedBanks([]);
+                                        setSelectedCategory(null);
+                                    }}
+                                    className="mt-3 w-full text-purple-400 hover:text-purple-300 text-sm font-medium"
+                                >
+                                    Limpiar selección
+                                </button>
+                            )}
                         </div>
                     </div>
 
                     <div>
-                        <label className="text-white text-sm mb-2 block font-semibold">Meses de Cierre: ({selectedMonths.length > 0 ? selectedMonths.length : 'Todos'})</label>
+                        <label className="text-white text-sm mb-2 block font-semibold">
+                            Meses de Cierre: ({selectedMonths.length > 0 ? selectedMonths.length : 'Todos'})
+                        </label>
                         <div className="bg-slate-800 border border-purple-500 rounded-lg p-4 max-h-48 overflow-y-auto">
                             <div className="space-y-2">
                                 {MONTHS.map(month => (
                                     <label key={month} className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
-                                        <input type="checkbox" checked={selectedMonths.includes(month)} onChange={(e) => { if (e.target.checked) setSelectedMonths([...selectedMonths, month]); else setSelectedMonths(selectedMonths.filter(m => m !== month)); setSelectedCategory(null); }} className="w-4 h-4 text-purple-500 border-purple-400 rounded focus:ring-purple-500" />
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedMonths.includes(month)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedMonths([...selectedMonths, month]);
+                                                } else {
+                                                    setSelectedMonths(selectedMonths.filter(m => m !== month));
+                                                }
+                                                setSelectedCategory(null);
+                                            }}
+                                            className="w-4 h-4 text-purple-500 border-purple-400 rounded focus:ring-purple-500"
+                                        />
                                         <span className="text-white text-sm">{month}</span>
                                     </label>
                                 ))}
                             </div>
-                            {selectedMonths.length > 0 && <button onClick={() => { setSelectedMonths([]); setSelectedCategory(null); }} className="mt-3 w-full text-purple-400 hover:text-purple-300 text-sm font-medium">Limpiar selección</button>}
+                            {selectedMonths.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        setSelectedMonths([]);
+                                        setSelectedCategory(null);
+                                    }}
+                                    className="mt-3 w-full text-purple-400 hover:text-purple-300 text-sm font-medium"
+                                >
+                                    Limpiar selección
+                                </button>
+                            )}
                         </div>
                     </div>
 
                     <div>
-                        <label className="text-white text-sm mb-2 block font-semibold">Años: ({selectedYears.length > 0 ? selectedYears.length : 'Todos'})</label>
+                        <label className="text-white text-sm mb-2 block font-semibold">
+                            Años: ({selectedYears.length > 0 ? selectedYears.length : 'Todos'})
+                        </label>
                         <div className="bg-slate-800 border border-purple-500 rounded-lg p-4 max-h-48 overflow-y-auto">
                             <div className="space-y-2">
                                 {YEARS.map(year => (
                                     <label key={year} className="flex items-center gap-3 cursor-pointer hover:bg-slate-700/50 p-2 rounded">
-                                        <input type="checkbox" checked={selectedYears.includes(year)} onChange={(e) => { if (e.target.checked) setSelectedYears([...selectedYears, year]); else setSelectedYears(selectedYears.filter(y => y !== year)); setSelectedCategory(null); }} className="w-4 h-4 text-purple-500 border-purple-400 rounded focus:ring-purple-500" />
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedYears.includes(year)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedYears([...selectedYears, year]);
+                                                } else {
+                                                    setSelectedYears(selectedYears.filter(y => y !== year));
+                                                }
+                                                setSelectedCategory(null);
+                                            }}
+                                            className="w-4 h-4 text-purple-500 border-purple-400 rounded focus:ring-purple-500"
+                                        />
                                         <span className="text-white text-sm">{year}</span>
                                     </label>
                                 ))}
                             </div>
-                            {selectedYears.length > 0 && <button onClick={() => { setSelectedYears([]); setSelectedCategory(null); }} className="mt-3 w-full text-purple-400 hover:text-purple-300 text-sm font-medium">Limpiar selección</button>}
+                            {selectedYears.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        setSelectedYears([]);
+                                        setSelectedCategory(null);
+                                    }}
+                                    className="mt-3 w-full text-purple-400 hover:text-purple-300 text-sm font-medium"
+                                >
+                                    Limpiar selección
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {displayRange && (
                     <div className="mb-8 bg-purple-900/30 border border-purple-500/50 rounded-lg p-4">
-                        <p className="text-white text-center"><span className="font-semibold text-purple-300">Periodo seleccionado:</span> {displayRange}</p>
+                        <p className="text-white text-center">
+                            <span className="font-semibold text-purple-300">Periodo seleccionado:</span> {displayRange}
+                        </p>
                     </div>
                 )}
 
                 {selectedCategory && (
                     <div className="mb-6 bg-pink-900/30 border border-pink-500/50 rounded-lg p-4 flex items-center justify-between">
-                        <p className="text-white"><span className="font-semibold text-pink-300">Mostrando categoría:</span> {selectedCategory}</p>
-                        <button onClick={() => setSelectedCategory(null)} className="text-pink-400 hover:text-pink-300 flex items-center gap-2"><X size={20} />Limpiar filtro</button>
+                        <p className="text-white">
+                            <span className="font-semibold text-pink-300">Mostrando categoría:</span> {selectedCategory}
+                        </p>
+                        <button
+                            onClick={() => setSelectedCategory(null)}
+                            className="text-pink-400 hover:text-pink-300 flex items-center gap-2"
+                        >
+                            <X size={20} />
+                            Limpiar filtro
+                        </button>
                     </div>
                 )}
 
@@ -293,7 +521,9 @@ const ExpenseDashboard = () => {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-purple-100 text-sm mb-1">Total Gastado</p>
-                                <p className="text-white text-3xl font-bold">₡{totalGastos.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-white text-3xl font-bold">
+                                    {totalGastos.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
                             </div>
                             <DollarSign className="text-purple-200" size={48} />
                         </div>
@@ -312,7 +542,7 @@ const ExpenseDashboard = () => {
 
                 {selectedMonths.length === 1 && selectedYears.length === 1 && (() => {
                     const monthIndex = MONTHS.indexOf(selectedMonths[0]);
-                    const year = parseInt(selectedYears[0]);
+                    const year = parseInt(selectedYears[0], 10);
 
                     const inicioIngresos = new Date(year, monthIndex, 24, 0, 0, 0);
                     const añoFin = monthIndex === 11 ? year + 1 : year;
@@ -338,11 +568,28 @@ const ExpenseDashboard = () => {
                         <div className="mb-8 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-8 shadow-2xl border-4 border-emerald-400">
                             <div className="text-center">
                                 <p className="text-emerald-100 text-lg mb-2 font-semibold">Disponible para {siguienteMes}</p>
-                                <p className={`text-white text-5xl font-bold mb-4 ${disponibleProximoMes < 0 ? 'text-red-300' : ''}`}>₡{disponibleProximoMes.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className={`text-white text-5xl font-bold mb-4 ${disponibleProximoMes < 0 ? 'text-red-300' : ''}`}>
+                                    {disponibleProximoMes.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 text-sm">
-                                    <div className="bg-white/10 rounded-lg p-3"><p className="text-emerald-200 mb-1">Ingresos de {selectedMonths[0]}</p><p className="text-white font-bold">₡{totalIngresosDelMes.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
-                                    <div className="bg-white/10 rounded-lg p-3"><p className="text-emerald-200 mb-1">Gastos CREDIX + PROMERICA + EFECTIVEX</p><p className="text-white font-bold">₡{totalGastosCredixPromerica.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
-                                    <div className="bg-white/10 rounded-lg p-3"><p className="text-emerald-200 mb-1">Gastos Fijos</p><p className="text-white font-bold">₡{totalGastosFijos.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
+                                    <div className="bg-white/10 rounded-lg p-3">
+                                        <p className="text-emerald-200 mb-1">Ingresos de {selectedMonths[0]}</p>
+                                        <p className="text-white font-bold">
+                                            {totalIngresosDelMes.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <div className="bg-white/10 rounded-lg p-3">
+                                        <p className="text-emerald-200 mb-1">Gastos CREDIX + PROMERICA + EFECTIVEX</p>
+                                        <p className="text-white font-bold">
+                                            {totalGastosCredixPromerica.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <div className="bg-white/10 rounded-lg p-3">
+                                        <p className="text-emerald-200 mb-1">Gastos Fijos</p>
+                                        <p className="text-white font-bold">
+                                            {totalGastosFijos.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -353,15 +600,25 @@ const ExpenseDashboard = () => {
                     <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-2xl">
                         <h2 className="text-2xl font-bold text-white mb-4">Gastos por Categoría</h2>
                         <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                            {gastosPorCategoria.length > 0 ? gastosPorCategoria.map((cat, index) => (
-                                <div key={index} onClick={() => setSelectedCategory(cat.name)} className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors cursor-pointer">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                                        <span className="text-white font-medium">{cat.name}</span>
+                            {gastosPorCategoria.length > 0 ? (
+                                gastosPorCategoria.map((cat, index) => (
+                                    <div
+                                        key={index}
+                                        onClick={() => setSelectedCategory(cat.name)}
+                                        className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                                            <span className="text-white font-medium">{cat.name}</span>
+                                        </div>
+                                        <span className="text-purple-400 font-bold">
+                                            {cat.value.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
                                     </div>
-                                    <span className="text-purple-400 font-bold">₡{cat.value.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                </div>
-                            )) : <div className="h-[200px] flex items-center justify-center text-gray-400">No hay datos</div>}
+                                ))
+                            ) : (
+                                <div className="h-[200px] flex items-center justify-center text-gray-400">No hay datos</div>
+                            )}
                         </div>
                     </div>
 
@@ -371,20 +628,27 @@ const ExpenseDashboard = () => {
                             {FIXED_EXPENSES.map((expense, index) => (
                                 <div key={index} className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
                                     <span className="text-white font-medium">{expense.nombre}</span>
-                                    <span className="text-orange-400 font-bold">₡{expense.monto.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    <span className="text-orange-400 font-bold">
+                                        {expense.monto.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
                                 </div>
                             ))}
                         </div>
                         <div className="border-t border-slate-600 pt-3">
                             <div className="flex justify-between items-center p-3 bg-orange-900/30 rounded-lg">
                                 <span className="text-orange-200 font-bold">Total Gastos Fijos</span>
-                                <span className="text-white text-xl font-bold">₡{totalGastosFijos.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span className="text-white text-xl font-bold">
+                                    {totalGastosFijos.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-2xl lg:col-span-2">
-                        <h2 className="text-2xl font-bold text-white mb-4">Transacciones ({displayExpenses.length}){selectedCategory && <span className="text-pink-400"> - {selectedCategory}</span>}</h2>
+                        <h2 className="text-2xl font-bold text-white mb-4">
+                            Transacciones ({displayExpenses.length})
+                            {selectedCategory && <span className="text-pink-400"> - {selectedCategory}</span>}
+                        </h2>
                         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                             {displayExpenses.length > 0 ? (
                                 <table className="w-full text-left">
@@ -405,19 +669,23 @@ const ExpenseDashboard = () => {
                                                 <td className="py-3 pr-4 text-gray-300">{item.categoria}</td>
                                                 <td className="py-3 pr-4 text-gray-300">{item.banco}</td>
                                                 <td className="py-3 text-right">
-                                                    <span className="text-pink-400 font-bold">₡{item.monto.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    <span className="text-pink-400 font-bold">
+                                                        {item.monto.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
                                                 </td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
-                            ) : <div className="h-[200px] flex items-center justify-center text-gray-400">No hay transacciones para mostrar</div>}
+                            ) : (
+                                <div className="h-[200px] flex items-center justify-center text-gray-400">No hay transacciones para mostrar</div>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 <p className="text-gray-400 text-sm text-center mt-8">
-                    Última actualización: {new Date().toLocaleString()} • Se actualiza automáticamente cada 30 segundos
+                    Última actualización: {new Date().toLocaleString()} Actualización automática cada 30 segundos
                 </p>
             </div>
         </div>
