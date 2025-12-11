@@ -67,7 +67,15 @@ export async function GET() {
     }
 
     // Agrupar por thread
-    const threads: Record<string, any[]> = {};
+    const threads: Record<string, Array<{
+      id?: string;
+      threadId?: string;
+      from: string;
+      subject: string;
+      date: string;
+      isUnread: boolean;
+      labelIds: string[];
+    }>> = {};
     details.forEach(detail => {
       if (!threads[detail.threadId!]) {
         threads[detail.threadId!] = [];

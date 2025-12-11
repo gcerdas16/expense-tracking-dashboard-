@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getPendingRows, updateDescription } from '@/lib/sheets-client';
 import { getSlackThreadReplies } from '@/lib/slack-client';
 
