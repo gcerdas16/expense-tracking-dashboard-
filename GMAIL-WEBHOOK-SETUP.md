@@ -191,7 +191,49 @@ El código ya maneja reintentos automáticos con exponential backoff. Si llegas 
 
 ## 📞 Próximos pasos opcionales
 
-1. **Renovación automática de Gmail Watch:** Crear endpoint que renueve el watch cada 6 días
+1. **✅ Renovación automática de Gmail Watch (IMPLEMENTADO):** Configurar cron job en Railway
 2. **Dashboard de monitoreo:** Ver estado de sincronización en la UI
 3. **Notificaciones de errores:** Enviar a Slack si algo falla
 4. **Soporte para más bancos:** Agregar más extractores de emails
+
+---
+
+## 🔄 Configurar Renovación Automática de Gmail Watch
+
+**IMPORTANTE:** Gmail Watch expira cada 7 días. Para automatizar la renovación:
+
+### Opción A: Usar Cron Job en Railway (Recomendado)
+
+1. En tu proyecto de Railway, click en **"New"** → **"Cron Job"**
+2. Configura:
+   - **Name:** `Renew Gmail Watch`
+   - **Schedule (Cron):** `0 0 */6 * *` (cada 6 días a medianoche)
+   - **Command:** 
+     ```bash
+     curl -X POST https://expense-tracking-dashboard-production.up.railway.app/api/renew-gmail-watch
+     ```
+3. **Attach to service:** Selecciona tu servicio
+4. **Deploy**
+
+### Opción B: Usar un servicio externo de cron (como cron-job.org)
+
+1. Ve a https://cron-job.org (o similar)
+2. Crea un job que ejecute cada 6 días:
+   - URL: `https://expense-tracking-dashboard-production.up.railway.app/api/renew-gmail-watch`
+   - Método: POST
+   - Schedule: Cada 6 días
+
+### Verificar renovación manual
+
+```bash
+curl -X POST https://expense-tracking-dashboard-production.up.railway.app/api/renew-gmail-watch
+```
+
+Deberías ver:
+```json
+{
+  "success": true,
+  "message": "Gmail Watch renovado exitosamente",
+  "daysUntilExpiration": 7
+}
+```

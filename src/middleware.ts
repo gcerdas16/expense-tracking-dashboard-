@@ -10,7 +10,9 @@ export async function middleware(request: NextRequest) {
         '/api/auth/login', 
         '/api/test-password',
         '/api/gmail-webhook',
-        '/api/sync-slack-replies'
+        '/api/sync-slack-replies',
+        '/api/test-gmail-process',
+        '/api/renew-gmail-watch'
     ];
     const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
 
