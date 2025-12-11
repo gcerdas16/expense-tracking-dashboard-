@@ -14,7 +14,8 @@ export async function middleware(request: NextRequest) {
         '/api/test-gmail-process',
         '/api/renew-gmail-watch',
         '/api/mark-all-read',
-        '/api/test-write-sheet'
+        '/api/test-write-sheet',
+        '/api/debug-emails'
     ];
     const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
 

@@ -76,7 +76,7 @@ export async function searchUnreadBankEmails(): Promise<string[]> {
     const response = await gmail.users.messages.list({
       userId: 'me',
       q: query,
-      maxResults: 10,
+      maxResults: 50, // Aumentado para procesar más correos
     });
 
     return response.data.messages?.map((m) => m.id!) || [];
