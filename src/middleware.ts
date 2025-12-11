@@ -13,7 +13,8 @@ export async function middleware(request: NextRequest) {
         '/api/sync-slack-replies',
         '/api/test-gmail-process',
         '/api/renew-gmail-watch',
-        '/api/mark-all-read'
+        '/api/mark-all-read',
+        '/api/test-write-sheet'
     ];
     const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
 
