@@ -12,7 +12,8 @@ export async function middleware(request: NextRequest) {
         '/api/gmail-webhook',
         '/api/sync-slack-replies',
         '/api/test-gmail-process',
-        '/api/renew-gmail-watch'
+        '/api/renew-gmail-watch',
+        '/api/mark-all-read'
     ];
     const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
 
