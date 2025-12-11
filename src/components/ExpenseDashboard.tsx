@@ -36,12 +36,6 @@ interface FixedExpense {
     monto: number;
 }
 
-interface ValidationError {
-    row: number;
-    issue: string;
-    value: string;
-}
-
 interface ParseResult {
     monto: number | null;
     error: string | null;
@@ -229,10 +223,10 @@ const ExpenseDashboard = () => {
                 header: true,
                 skipEmptyLines: true,
                 complete: (results) => {
-                    const expensesParsed = results.data.map((row, index) => {
-                        const { monto, error: montoError } = validateAndParseMonto(row.Monto || row.monto || '0');
+                    const expensesParsed = results.data.map((row) => {
+                        const { monto } = validateAndParseMonto(row.Monto || row.monto || '0');
                         const fechaStr = row.Fecha || row.fecha || '';
-                        const { date: fechaDate, error: dateError } = validateAndParseDate(fechaStr);
+                        const { date: fechaDate } = validateAndParseDate(fechaStr);
 
                         return {
                             comercio: row.Comercio || row.comercio || 'Sin comercio',
@@ -256,10 +250,10 @@ const ExpenseDashboard = () => {
                 skipEmptyLines: true,
                 complete: (results) => {
                     console.log('Raw income row sample:', results.data[0]);
-                    const incomesParsed = results.data.map((row, index) => {
-                        const { monto, error: montoError } = validateAndParseMonto(row.Monto || row.monto || '0');
+                    const incomesParsed = results.data.map((row) => {
+                        const { monto } = validateAndParseMonto(row.Monto || row.monto || '0');
                         const fechaStr = row['Fecha de Ingreso'] || row['Fecha de ingreso'] || row.Fecha || row.fecha || '';
-                        const { date: fechaDate, error: dateError } = validateAndParseDate(fechaStr);
+                        const { date: fechaDate } = validateAndParseDate(fechaStr);
 
                         return {
                             fuente: row['Fuente del Ingreso'] || row.Fuente || row.fuente || 'Sin fuente',
@@ -331,6 +325,7 @@ const ExpenseDashboard = () => {
         const itemTime = fecha.getTime();
         return itemTime >= range.inicioIngresos.getTime() && itemTime <= range.finIngresos.getTime();
     };
+    // Nota: isInIncomePeriod se usa para validar ingresos en cálculos manuales
 
     let filteredExpenses = expenses;
 

@@ -5,7 +5,13 @@ import { SessionData, sessionOptions } from '@/lib/auth';
 
 export async function middleware(request: NextRequest) {
     // Rutas públicas que no requieren autenticación
-    const publicPaths = ['/login', '/api/auth/login', '/api/test-password'];
+    const publicPaths = [
+        '/login', 
+        '/api/auth/login', 
+        '/api/test-password',
+        '/api/gmail-webhook',
+        '/api/sync-slack-replies'
+    ];
     const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
 
     // Si está en una ruta pública, permitir acceso
