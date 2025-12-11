@@ -46,7 +46,7 @@ export async function writeTransactionToSheet(
     const newRow = (response.data.values?.length || 1) + 1;
 
     // Preparar los valores
-    const values: any[][] = [[]];
+    const values: (string | number | undefined)[][] = [[]];
     values[0][COLUMNAS.COMERCIO - 1] = transaction.comercio;
     values[0][COLUMNAS.FECHA - 1] = transaction.fecha;
     values[0][COLUMNAS.MONEDA - 1] = transaction.moneda;

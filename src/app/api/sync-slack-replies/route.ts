@@ -6,7 +6,7 @@ import { getSlackThreadReplies } from '@/lib/slack-client';
  * Endpoint para sincronizar respuestas de Slack con Google Sheets
  * Se puede llamar manualmente o configurar como cron job
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     console.log('🔄 Iniciando sincronización de respuestas de Slack...');
 

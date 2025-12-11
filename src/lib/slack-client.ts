@@ -163,7 +163,7 @@ export async function sendSlackNotification(
  */
 export async function getSlackThreadReplies(
   threadTs: string
-): Promise<{ ok: boolean; messages?: any[]; error?: string }> {
+): Promise<{ ok: boolean; messages?: Array<{ text: string; [key: string]: unknown }>; error?: string }> {
   const token = await getSlackToken();
   const channelId = await getSlackChannelId();
 

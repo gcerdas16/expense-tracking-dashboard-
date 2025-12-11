@@ -59,8 +59,8 @@ function extractBacDataFromHTML(htmlBody: string): TransactionData | null {
 
       return { fecha, monto, comercio, moneda, banco: 'BAC' };
     }
-  } catch (e) {
-    console.error('Error procesando nuevo formato BAC:', e);
+  } catch {
+    console.error('Error procesando nuevo formato BAC');
   }
 
   // Intentar formato antiguo
@@ -89,8 +89,8 @@ function extractBacDataFromHTML(htmlBody: string): TransactionData | null {
       
       return { fecha, monto, comercio, moneda: 'CRC', banco: 'BAC' };
     }
-  } catch (e) {
-    console.error('Error procesando formato antiguo BAC:', e);
+  } catch {
+    console.error('Error procesando formato antiguo BAC');
   }
 
   return null;
@@ -106,7 +106,7 @@ function extractPromericaDataFromHTML(htmlBody: string): TransactionData | null 
     if (!htmlBody.includes('</html>')) {
       decodedBody = Buffer.from(htmlBody.replace(/(\r\n|\n|\r)/gm, ''), 'base64').toString('utf-8');
     }
-  } catch (e) {
+  } catch {
     console.error('No se pudo decodificar Promerica, usando original');
   }
   
