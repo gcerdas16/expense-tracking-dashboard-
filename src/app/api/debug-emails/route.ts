@@ -38,15 +38,7 @@ export async function GET() {
     }
 
     // Obtener detalles de cada correo
-    const details: Array<{
-      id: string | null | undefined;
-      threadId: string | null | undefined;
-      from: string;
-      subject: string;
-      date: string;
-      isUnread: boolean;
-      labelIds: string[];
-    }> = [];
+    const details: any[] = [];
     for (const msg of messages) {
       const detail = await gmail.users.messages.get({
         userId: 'me',
@@ -75,20 +67,12 @@ export async function GET() {
     }
 
     // Agrupar por thread
-    const threads: Record<string, Array<{
-      id: string | null | undefined;
-      threadId: string | null | undefined;
-      from: string;
-      subject: string;
-      date: string;
-      isUnread: boolean;
-      labelIds: string[];
-    }>> = {};
+    const threads: Record<string, any[]> = {};
     details.forEach(detail => {
-      if (!threads[detail.threadId!]) {
-        threads[detail.threadId!] = [];
+      if (!threads[detail.threadId]) {
+        threads[detail.threadId] = [];
       }
-      threads[detail.threadId!].push(detail);
+      threads[detail.threadId].push(detail);
     });
 
     return NextResponse.json({

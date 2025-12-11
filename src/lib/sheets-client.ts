@@ -69,13 +69,13 @@ export async function writeTransactionToSheet(
       requestBody: { values },
     });
 
-    // Agregar fórmula de categoría
+    // Agregar fórmula de categoría (usando punto y coma para configuración regional española)
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `${SHEET_NAME}!F${newRow}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
-        values: [[`=VLOOKUP(A${newRow},'Base de Comercios'!A:B,2,0)`]],
+        values: [[`=VLOOKUP(A${newRow};'Base de Comercios'!A:B;2;0)`]],
       },
     });
 
