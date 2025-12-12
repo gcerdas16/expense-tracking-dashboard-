@@ -3,6 +3,7 @@ import { getEmailById, markEmailAsRead } from '@/lib/gmail-client';
 import { processEmail } from '@/lib/email-processor';
 import { writeTransactionToSheet } from '@/lib/sheets-client';
 import { sendSlackNotification } from '@/lib/slack-client';
+import { getRecentTransactions, generateTransactionKey } from '@/lib/processed-emails';
 
 interface PubSubMessage {
   message: {
@@ -24,6 +25,10 @@ export async function POST(request: NextRequest) {
     const body: PubSubMessage = await request.json();
     
     console.log('📬 Notificación recibida de Pub/Sub');
+
+    // Obtener transacciones recientes de Sheets para evitar duplicados
+    const recentTransactions = await getRecentTransactions(24); // Últimas 24 horas
+    console.log(`Transacciones recientes en Sheet: ${recentTransactions.size}`);
 
     // Decodificar el mensaje de Pub/Sub
     const messageData = JSON.parse(
@@ -76,7 +81,17 @@ export async function POST(request: NextRequest) {
 
         console.log('✓ Transacción extraída:', transaction);
 
-        // Enviar notificación a Slack PRIMERO
+        // Verificar si esta transacción ya existe en Sheets
+      const transactionKey = generateTransactionKey(transaction.comercio, transaction.fecha, transaction.monto);
+      if (recentTransactions.has(transactionKey)) {
+        console.log(`⚠ Transacción duplicada detectada: ${transactionKey}`);
+        console.log('Saltando... (ya existe en Sheets)');
+        await markEmailAsRead(messageId);
+        processedEmails.add(messageId);
+        continue;
+      }
+
+      // Enviar notificación a Slack PRIMERO
         const slackResponse = await sendSlackNotification(
           transaction.comercio,
           transaction.monto,
