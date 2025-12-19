@@ -31,11 +31,6 @@ interface BillingCycle {
     diaCorte: number;
 }
 
-interface FixedExpense {
-    nombre: string;
-    monto: number;
-}
-
 interface ParseResult {
     monto: number | null;
     error: string | null;
@@ -53,19 +48,6 @@ const BILLING_CYCLES: BillingCycle[] = [
     { banco: 'BCR', diaCorte: 24 },
     { banco: 'SINPE MOVIL BCR', diaCorte: 24 },
     { banco: 'T.C EFECTIVEX', diaCorte: 24 }
-];
-
-const FIXED_EXPENSES: FixedExpense[] = [
-    { nombre: 'Alquiler de Vivienda', monto: 260000 },
-    { nombre: 'Claro', monto: 11000 },
-    { nombre: 'ESPH', monto: 25000 },
-    { nombre: 'Cuota de Refrigeradora', monto: 19000 },
-    { nombre: 'Cuota de Televisor', monto: 32000 },
-    { nombre: 'Isayara', monto: 60000 },
-    { nombre: 'EPA Belen', monto: 8800 },
-    { nombre: 'YT Premium', monto: 4800 },
-    { nombre: 'Microsoft', monto: 4000 },
-    { nombre: 'Railway', monto: 3000 },
 ];
 
 const MONTHS = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
@@ -342,7 +324,6 @@ const ExpenseDashboard = () => {
 
     const displayExpenses = selectedCategory ? filteredExpenses.filter(item => item.categoria === selectedCategory) : filteredExpenses;
     const totalGastos = filteredExpenses.reduce((sum, item) => sum + item.monto, 0);
-    const totalGastosFijos = FIXED_EXPENSES.reduce((sum, item) => sum + item.monto, 0);
 
     const categorias = [...new Set(filteredExpenses.map(d => d.categoria))];
     const COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#06b6d4', '#f97316'];
@@ -572,7 +553,7 @@ const ExpenseDashboard = () => {
                         return isInBillingPeriod(expense.fechaDate, banco, monthIndex, year);
                     });
                     const totalGastosCredixPromerica = gastosCredixPromerica.reduce((sum, item) => sum + item.monto, 0);
-                    const disponibleProximoMes = totalIngresosDelMes - totalGastosCredixPromerica - totalGastosFijos;
+                    const disponibleProximoMes = totalIngresosDelMes - totalGastosCredixPromerica;
                     const siguienteMes = MONTHS[(monthIndex + 1) % 12];
 
                     return (
@@ -582,7 +563,7 @@ const ExpenseDashboard = () => {
                                 <p className={`text-white text-5xl font-bold mb-4 ${disponibleProximoMes < 0 ? 'text-red-300' : ''}`}>
                                     {disponibleProximoMes.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 text-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 text-sm">
                                     <div className="bg-white/10 rounded-lg p-3">
                                         <p className="text-emerald-200 mb-1">Ingresos de {selectedMonths[0]}</p>
                                         <p className="text-white font-bold">
@@ -593,12 +574,6 @@ const ExpenseDashboard = () => {
                                         <p className="text-emerald-200 mb-1">Gastos CREDIX + PROMERICA + EFECTIVEX</p>
                                         <p className="text-white font-bold">
                                             {totalGastosCredixPromerica.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </p>
-                                    </div>
-                                    <div className="bg-white/10 rounded-lg p-3">
-                                        <p className="text-emerald-200 mb-1">Gastos Fijos</p>
-                                        <p className="text-white font-bold">
-                                            {totalGastosFijos.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </p>
                                     </div>
                                 </div>
@@ -630,28 +605,6 @@ const ExpenseDashboard = () => {
                             ) : (
                                 <div className="h-[200px] flex items-center justify-center text-gray-400">No hay datos</div>
                             )}
-                        </div>
-                    </div>
-
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-2xl">
-                        <h2 className="text-2xl font-bold text-white mb-4">Gastos Fijos Mensuales</h2>
-                        <div className="space-y-3 max-h-[250px] overflow-y-auto mb-4">
-                            {FIXED_EXPENSES.map((expense, index) => (
-                                <div key={index} className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
-                                    <span className="text-white font-medium">{expense.nombre}</span>
-                                    <span className="text-orange-400 font-bold">
-                                        {expense.monto.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="border-t border-slate-600 pt-3">
-                            <div className="flex justify-between items-center p-3 bg-orange-900/30 rounded-lg">
-                                <span className="text-orange-200 font-bold">Total Gastos Fijos</span>
-                                <span className="text-white text-xl font-bold">
-                                    {totalGastosFijos.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                            </div>
                         </div>
                     </div>
 

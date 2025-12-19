@@ -69,24 +69,9 @@ export async function POST() {
 }
 
 /**
- * Endpoint GET para verificar el estado actual del watch
+ * Endpoint GET - también ejecuta la renovación (para cron jobs que solo soportan GET)
  */
 export async function GET() {
-  try {
-    // Gmail API no tiene un endpoint para verificar el estado del watch
-    // Solo podemos intentar renovarlo
-    return NextResponse.json({
-      message: 'Para renovar el Gmail Watch, usa POST en este endpoint',
-      note: 'Este endpoint debe configurarse como cron job cada 6 días',
-      cronSchedule: '0 0 */6 * *' // Cada 6 días a medianoche
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      },
-      { status: 500 }
-    );
-  }
+  // Reutilizar la lógica de POST
+  return POST();
 }

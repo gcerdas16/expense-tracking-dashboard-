@@ -87,25 +87,9 @@ export async function POST() {
 }
 
 /**
- * Endpoint GET para verificar el estado
+ * Endpoint GET - también ejecuta la sincronización (para cron jobs que solo soportan GET)
  */
 export async function GET() {
-  try {
-    const pendingRows = await getPendingRows(5);
-    
-    return NextResponse.json({ 
-      status: 'ok',
-      pendingCount: pendingRows.length,
-      message: 'Slack sync endpoint is running',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { 
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      },
-      { status: 500 }
-    );
-  }
+  // Reutilizar la lógica de POST
+  return POST();
 }
