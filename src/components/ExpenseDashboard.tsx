@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DollarSign, CreditCard, X } from 'lucide-react';
+import { DollarSign, CreditCard, X, RefreshCw } from 'lucide-react';
 import Papa from 'papaparse';
 
 interface ExpenseData {
@@ -167,22 +167,27 @@ const ExpenseDashboard = () => {
     const [expenses, setExpenses] = useState<ExpenseData[]>([]);
     const [incomes, setIncomes] = useState<IncomeData[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
     const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
     const [selectedYears, setSelectedYears] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
     const EXPENSES_CSV_URL = '/api/data?type=expenses';
     const INCOMES_CSV_URL = '/api/data?type=incomes';
 
     useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, 30000);
-        return () => clearInterval(interval);
     }, []);
 
     const fetchData = async () => {
+        const isInitialLoad = loading;
+        if (!isInitialLoad) {
+            setRefreshing(true);
+        }
+
         try {
             console.log('=== FETCHING DATA ===');
             console.log('Timestamp:', new Date().toLocaleString());
@@ -249,12 +254,16 @@ const ExpenseDashboard = () => {
                     console.log('Incomes parsed:', incomesParsed.length);
                     console.log('Sample income:', incomesParsed[0]);
                     console.log('=== FETCH COMPLETE ===\n');
+                    
+                    setLastUpdate(new Date());
                     setLoading(false);
+                    setRefreshing(false);
                 }
             });
         } catch (err) {
             setError(`Error: ${err instanceof Error ? err.message : 'Unknown'}`);
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -361,10 +370,36 @@ const ExpenseDashboard = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
             <div className="max-w-7xl mx-auto">
-                <h1 className="text-4xl font-bold text-white mb-8 flex items-center gap-3">
-                    <DollarSign className="text-purple-400" size={40} />
-                    Dashboard de Gastos
-                </h1>
+                <div className="flex items-center justify-between mb-8">
+                    <h1 className="text-4xl font-bold text-white flex items-center gap-3">
+                        <DollarSign className="text-purple-400" size={40} />
+                        Dashboard de Gastos
+                    </h1>
+                    
+                    <button
+                        onClick={fetchData}
+                        disabled={refreshing}
+                        className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition-all duration-200 flex items-center gap-2"
+                    >
+                        <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
+                        {refreshing ? 'Actualizando...' : 'Actualizar Datos'}
+                    </button>
+                </div>
+
+                {lastUpdate && (
+                    <div className="mb-6 bg-slate-800/50 border border-purple-500/30 rounded-lg p-3">
+                        <p className="text-gray-300 text-sm text-center">
+                            Última actualización: {lastUpdate.toLocaleString('es-CR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                            })}
+                        </p>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
@@ -645,10 +680,6 @@ const ExpenseDashboard = () => {
                         </div>
                     </div>
                 </div>
-
-                <p className="text-gray-400 text-sm text-center mt-8">
-                    Última actualización: {new Date().toLocaleString()} Actualización automática cada 30 segundos
-                </p>
             </div>
         </div>
     );

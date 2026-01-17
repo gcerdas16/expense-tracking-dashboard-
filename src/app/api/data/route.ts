@@ -34,8 +34,8 @@ export async function GET(request: Request) {
         try {
             const response = await fetch(url, {
                 signal: controller.signal,
-                // Agregar cache control para evitar datos muy antiguos
-                next: { revalidate: 60 } // Revalidar cada 60 segundos
+                // Aumentar revalidación a 4 minutos para reducir requests
+                next: { revalidate: 240 }
             });
 
             clearTimeout(timeoutId);
@@ -49,8 +49,9 @@ export async function GET(request: Request) {
             return new NextResponse(data, {
                 headers: {
                     'Content-Type': 'text/csv',
-                    'Cache-Control': 'private, max-age=60', // Cache privado por 60 segundos
-                    'X-Content-Type-Options': 'nosniff', // Prevenir MIME sniffing
+                    // Aumentar cache a 4 minutos (240 segundos)
+                    'Cache-Control': 'private, max-age=240, stale-while-revalidate=60',
+                    'X-Content-Type-Options': 'nosniff',
                 }
             });
         } catch (fetchError) {
